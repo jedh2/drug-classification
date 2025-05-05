@@ -5,7 +5,12 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-from sklearn.metrics import accuracy_score, f1_score, ConfusionMatrixDisplay, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    ConfusionMatrixDisplay,
+    confusion_matrix,
+)
 import matplotlib.pyplot as plt
 import skops.io as sio
 
@@ -18,11 +23,13 @@ print(drug_df.head(5))
 X = drug_df.drop("Drug", axis=1).values
 y = drug_df.Drug.values
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
 
 # Build pipeline
-cat_col = [1,2,3]
-num_col = [0,4]
+cat_col = [1, 2, 3]
+num_col = [0, 4]
 
 # ColumnTransformer converts categorical values into numbers, fill in missing values, and scale the numerical columns
 transform = ColumnTransformer(
@@ -47,15 +54,15 @@ f1 = f1_score(y_test, predictions, average="macro")
 
 print("Accuracy:", str(round(accuracy, 2) * 100) + "%", "F1:", round(f1, 2))
 
-#Create and save metrics file to the Results folder
+# Create and save metrics file to the Results folder
 with open("Results/metrics.txt", "w") as outfile:
     outfile.write(f"\nAccuracy = {round(accuracy, 2)}, F1 Score = {round(f1, 2)}.")
 
-#Create confusion matrix
+# Create confusion matrix
 cm = confusion_matrix(y_test, predictions, labels=pipe.classes_)
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=pipe.classes_)
 disp.plot()
 plt.savefig("Results/model_results.png", dpi=120)
 
-#Save model
+# Save model
 sio.dump(pipe, "Model/drug_pipeline.skops")
