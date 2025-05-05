@@ -1,50 +1,72 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
-from sklearn.metrics import accuracy_score, f1_score
+import gradio as gr
+import skops.io as sio
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
 
-# Import drug classification data
-drug_df = pd.read_csv("Data/drug.csv")
-drug_df = drug_df.sample(frac=1)
-print(drug_df.head(5))
+# Suppress version warnings
+warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
 
-# Create dependent and independent variables
-X = drug_df.drop("Drug", axis=1).values
-y = drug_df.Drug.values
+# Specify trusted types
+trusted_types = [
+    "sklearn.pipeline.Pipeline",
+    "sklearn.preprocessing.OneHotEncoder",
+    "sklearn.preprocessing.StandardScaler",
+    "sklearn.compose.ColumnTransformer",
+    "sklearn.preprocessing.OrdinalEncoder",
+    "sklearn.impute.SimpleImputer",
+    "sklearn.tree.DecisionTreeClassifier",
+    "sklearn.ensemble.RandomForestClassifier",
+    "numpy.dtype",
+]
+pipe = sio.load("./Model/drug_pipeline.skops", trusted=trusted_types)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-# Build pipeline
-cat_col = [1,2,3]
-num_col = [0,4]
+def predict_drug(age, sex, blood_pressure, cholesterol, na_to_k_ratio):
+    """Predict drugs based on patient features.
 
-# ColumnTransformer converts categorical values into numbers, fill in missing values, and scale the numerical columns
-transform = ColumnTransformer(
-    [
-        ("encoder", OrdinalEncoder(), cat_col),
-        ("num_imputer", SimpleImputer(strategy="median"), num_col),
-        ("num_scaler", StandardScaler(), num_col),
-    ]
-)
-pipe = Pipeline(
-    steps=[
-        ("preprocessing", transform),
-        ("model", RandomForestClassifier(n_estimators=100, random_state=42)),
-    ]
-)
-pipe.fit(X_train, y_train)
+    Args:
+        age (int): Age of patient
+        sex (str): Sex of patient
+        blood_pressure (str): Blood pressure level
+        cholesterol (str): Cholesterol level
+        na_to_k_ratio (float): Ratio of sodium to potassium in blood
 
-# Evaluate model
-predictions = pipe.predict(X_test)
-accuracy = accuracy_score(y_test, predictions)
-f1 = f1_score(y_test, predictions, average="macro")
+    Returns:
+        str: Predicted drug label
+    """
+    features = [age, sex, blood_pressure, cholesterol, na_to_k_ratio]
+    predicted_drug = pipe.predict([features])[0]
 
-print("Accuracy:", str(round(accuracy, 2) * 100) + "%", "F1:", round(f1, 2))
+    label = f"Predicted Drug: {predicted_drug}"
+    return label
 
-#Create and save metrics file to the Results folder
-with open("Results/metrics.txt", "w") as outfile:
-    outfile.write(f"\nAccuracy = {round(accuracy, 2)}, F1 Score = {round(f1, 2)}.")
+
+inputs = [
+    gr.Slider(15, 74, step=1, label="Age"),
+    gr.Radio(["M", "F"], label="Sex"),
+    gr.Radio(["HIGH", "LOW", "NORMAL"], label="Blood Pressure"),
+    gr.Radio(["HIGH", "NORMAL"], label="Cholesterol"),
+    gr.Slider(6.2, 38.2, step=0.1, label="Na_to_K"),
+]
+outputs = [gr.Label(num_top_classes=5)]
+
+examples = [
+    [30, "M", "HIGH", "NORMAL", 15.4],
+    [35, "F", "LOW", "NORMAL", 8],
+    [50, "M", "HIGH", "HIGH", 34],
+]
+
+title = "Drug Classification"
+description = "Enter the details to correctly identify Drug type."
+article = "Background story: You are a medical researcher and have collected data on a set of experimental patients. These patients suffered from the same illness where only one drug responded (Drug A, B, C, X, or Y). The Random Forest Classifier model was trained on the data with F1 = 0.99 and Accuracy = 0.98. This app allows the model to predict a drug from your input on a patient's characteristics."
+
+gr.Interface(
+    fn=predict_drug,
+    inputs=inputs,
+    outputs=outputs,
+    examples=examples,
+    title=title,
+    description=description,
+    article=article,
+    theme=gr.themes.Glass(),
+).launch()
